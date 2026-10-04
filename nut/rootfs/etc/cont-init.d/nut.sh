@@ -5,6 +5,9 @@
 # ==============================================================================
 readonly USERS_CONF=/etc/nut/upsd.users
 readonly UPSD_CONF=/etc/nut/upsd.conf
+readonly TLS_CERTFILE=/ssl/fullchain.pem
+readonly TLS_KEYFILE=/ssl/privkey.pem
+readonly TLS_PEMFILE=/run/nut/upsd.pem
 declare nutmode
 declare password
 declare shutdowncmd
@@ -79,6 +82,31 @@ if bashio::config.equals 'mode' 'netserver' ;then
     if bashio::config.has_value "upsd_maxage"; then
         maxage=$(bashio::config "upsd_maxage")
         echo "MAXAGE ${maxage}" >> "${UPSD_CONF}"
+    fi
+
+    if bashio::config.true 'tls'; then
+        bashio::log.info "Enabling TLS for NUT server..."
+
+        if [[ ! -r "${TLS_CERTFILE}" ]]; then
+            bashio::exit.nok "TLS is enabled but ${TLS_CERTFILE} is not readable"
+        fi
+
+        if [[ ! -r "${TLS_KEYFILE}" ]]; then
+            bashio::exit.nok "TLS is enabled but ${TLS_KEYFILE} is not readable"
+        fi
+
+        {
+            cat "${TLS_CERTFILE}"
+            printf '\n'
+            cat "${TLS_KEYFILE}"
+        } > "${TLS_PEMFILE}"
+
+        chmod 0600 "${TLS_PEMFILE}"
+
+        {
+            echo "CERTFILE ${TLS_PEMFILE}"
+            echo "DISABLE_WEAK_SSL true"
+        } >> "${UPSD_CONF}"
     fi
 
     for device in $(bashio::config "devices|keys"); do
