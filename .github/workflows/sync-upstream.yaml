@@ -1,0 +1,90 @@
+---
+name: Sync upstream
+
+# yamllint disable-line rule:truthy
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync hassio-addons/app-nut
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⤵️ Check out fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 🔄 Fetch upstream
+        run: |
+          git remote add upstream https://github.com/hassio-addons/app-nut.git
+          git fetch upstream main
+          git fetch origin main
+          git fetch origin sync-upstream:refs/remotes/origin/sync-upstream || true
+
+      - name: 🧭 Determine whether sync is needed
+        id: check
+        run: |
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains the current upstream main."
+            exit 0
+          fi
+
+          if git show-ref --verify --quiet refs/remotes/origin/sync-upstream \
+            && git merge-base --is-ancestor origin/main origin/sync-upstream \
+            && git merge-base --is-ancestor upstream/main origin/sync-upstream; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "An existing sync branch already contains current main and upstream."
+            exit 0
+          fi
+
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+
+      - name: 🌿 Build sync branch
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B sync-upstream origin/main
+
+          if ! git merge --no-edit upstream/main; then
+            echo "::error::Upstream changes conflict with fork-specific changes."
+            git status --short
+            exit 1
+          fi
+
+          auth_header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic ${auth_header}" \
+            push --force-with-lease origin sync-upstream
+
+      - name: 🔀 Open or reuse sync pull request
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh pr view sync-upstream --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Sync pull request already exists."
+          else
+            gh pr create \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head sync-upstream \
+              --title "Sync upstream hassio-addons/app-nut" \
+              --body "Automated sync from \`hassio-addons/app-nut:main\`. CI must pass before this PR is merged. If upstream conflicts with the fork-specific TLS changes, this workflow stops without modifying \`main\`."
+          fi
