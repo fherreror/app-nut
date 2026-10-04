@@ -56,6 +56,9 @@ devices:
     config: []
 mode: netserver
 shutdown_host: "false"
+tls: true
+tls_certfile: /ssl/fullchain.pem
+tls_keyfile: /ssl/privkey.pem
 ```
 
 **Note**: _This is just an example, don't copy and paste it! Create your own!_
@@ -193,6 +196,45 @@ Recognized values are `netserver` and `netclient`.
 When this option is set to `true` on a UPS shutdown command, the host system
 will be shutdown. When set to `false` only the app will be stopped. This is to
 allow testing without impact to the system.
+
+### Option: `tls`
+
+Enables TLS support for the NUT server when running in `netserver` mode.
+
+When enabled, the app combines the configured server certificate chain and
+private key into the PEM file required by NUT and configures `upsd` to use
+TLS. Weak SSL/TLS protocols and ciphers are disabled.
+
+If TLS is enabled and either configured file is missing or unreadable, the app
+will stop during startup instead of starting the NUT server without TLS.
+
+### Option: `tls_certfile`
+
+Path to the PEM certificate chain presented by the NUT server.
+
+The default is:
+
+```text
+/ssl/fullchain.pem
+```
+
+The Home Assistant `ssl` directory is mounted read-only inside the app, so
+certificates managed by Home Assistant or another certificate app can be used
+without copying private material into the app image.
+
+### Option: `tls_keyfile`
+
+Path to the PEM private key matching `tls_certfile`.
+
+The default is:
+
+```text
+/ssl/privkey.pem
+```
+
+The private key is only read when the app starts. A temporary combined PEM file
+is created inside the app runtime directory for `upsd`; the source certificate
+and key remain in the read-only `/ssl` mount.
 
 ### Option: `list_usb_devices`
 
