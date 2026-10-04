@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: 🔄 Fetch upstream
         run: |
@@ -42,7 +43,9 @@ jobs:
             exit 0
           fi
 
-          if git show-ref --verify --quiet refs/remotes/origin/sync-upstream             && git merge-base --is-ancestor origin/main origin/sync-upstream             && git merge-base --is-ancestor upstream/main origin/sync-upstream; then
+          if git show-ref --verify --quiet refs/remotes/origin/sync-upstream \
+            && git merge-base --is-ancestor origin/main origin/sync-upstream \
+            && git merge-base --is-ancestor upstream/main origin/sync-upstream; then
             echo "needed=false" >> "$GITHUB_OUTPUT"
             echo "An existing sync branch already contains current main and upstream."
             exit 0
@@ -52,6 +55,8 @@ jobs:
 
       - name: 🌿 Build sync branch
         if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -64,7 +69,9 @@ jobs:
             exit 1
           fi
 
-          git push --force-with-lease origin sync-upstream
+          auth_header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic ${auth_header}" \
+            push --force-with-lease origin sync-upstream
 
       - name: 🔀 Open or reuse sync pull request
         if: steps.check.outputs.needed == 'true'
@@ -74,5 +81,10 @@ jobs:
           if gh pr view sync-upstream --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Sync pull request already exists."
           else
-            gh pr create               --repo "${GITHUB_REPOSITORY}"               --base main               --head sync-upstream               --title "Sync upstream hassio-addons/app-nut"               --body "Automated sync from \`hassio-addons/app-nut:main\`. CI must pass before this PR is merged. If upstream conflicts with the fork-specific TLS changes, this workflow stops without modifying \`main\`."
+            gh pr create \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head sync-upstream \
+              --title "Sync upstream hassio-addons/app-nut" \
+              --body "Automated sync from \`hassio-addons/app-nut:main\`. CI must pass before this PR is merged. If upstream conflicts with the fork-specific TLS changes, this workflow stops without modifying \`main\`."
           fi
