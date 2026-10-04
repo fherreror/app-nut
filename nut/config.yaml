@@ -37,6 +37,8 @@ options:
   mode: netserver
   shutdown_host: "false"
   tls: true
+  tls_certfile: /ssl/fullchain.pem
+  tls_keyfile: /ssl/privkey.pem
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)?
   users:
@@ -57,6 +59,8 @@ schema:
   mode: list(netserver|netclient)
   shutdown_host: bool
   tls: bool
+  tls_certfile: str
+  tls_keyfile: str
   list_usb_devices: bool?
   remote_ups_name: str?
   remote_ups_host: str?
