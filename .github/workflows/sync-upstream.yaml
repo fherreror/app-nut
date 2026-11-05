@@ -101,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_CHANGES: ${{ steps.check.outputs.workflow_changes }}
         run: |
-          body="Automated sync of application/build changes from `hassio-addons/app-nut:main`. CI must pass before this PR is merged."
+          body='Automated sync of application/build changes from `hassio-addons/app-nut:main`. CI must pass before this PR is merged.'
 
           if [[ "${WORKFLOW_CHANGES}" == "true" ]]; then
             body="${body}
